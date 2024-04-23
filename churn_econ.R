@@ -16,6 +16,8 @@ library("LogisticDx")
 library("aod")
 library("logistf")
 library("car")
+library(DescTools)
+
 
 
 data <- read_csv("dataset.csv")
@@ -205,24 +207,13 @@ anova(general, reduced_model_5, test = "LRT")
 # we can conclude that PaymentMethod improves the quality of the model
 
 # Step 7
-# let's drop "the most insignificant" - PaymentMethod
+# check if dropping OnlineSecurity will change quality
 reduced_model_6 <- glm(Churn ~ . - Partner - gender - OnlineBackup - TechSupport - OnlineSecurity
-                       , data = data 
+                       , data = data
                        , family = binomial(link = "probit"))
 summary(reduced_model_6)
 
-anova(general, reduced_model_5, test = "LRT")
-# there is no insignificant variables after removing OnlineSecurity
-# the OnlineSecurity also improves the quality of the model
-
-# Step 8
-# check if dropping OnlineSecurity will change quality
-reduced_model_7 <- glm(Churn ~ . - Partner - gender - OnlineBackup - TechSupport - OnlineSecurity
-                       , data = data
-                       , family = binomial(link = "probit"))
-summary(reduced_model_7)
-
-anova(general, reduced_model_7, test = "LRT")
+anova(general, reduced_model_6, test = "LRT")
 # We fail to reject H0 that the reduced model is better than general 
 # both models are equaly good, and we are left with only significant variables
 
@@ -237,3 +228,23 @@ final_model <- glm(Churn ~ . - Partner - gender - OnlineBackup - TechSupport - O
                 , data = data
                 , family = binomial(link = "probit"))
 summary(final_model)
+
+# marginal effects
+source("marginaleffects.R")
+source("linktest.R")
+
+# for average characteristics
+probitmfx(formula=Churn ~ . - Partner - gender - OnlineBackup - TechSupport - OnlineSecurity
+                              , data = data
+                              , atmean = T)
+
+# R-Squared statistics
+PseudoR2(final_model,c("McFadden","Tjur","McKelveyZavoina","VeallZimmermann","Nagelkerke"))
+
+# linktest
+# The linktest evaluates if the functional form specified
+# for the predictors in the model  adequatly captures the relationship with the response variable
+linktest_result <- linktest(final_model)
+# yhat is significant so there is no need to include or omit variable,
+# and the predicted yhat is very identical to the real y dependent variable values.
+
