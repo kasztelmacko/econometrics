@@ -4,20 +4,28 @@
 #                                      #
 ########################################
 
-setwd("C:\\Users\\kaszt\\OneDrive\\Dokumenty\\advanced econometric\\projekt")
+# setwd("C:\\Users\\kaszt\\OneDrive\\Dokumenty\\advanced econometric\\projekt")
+# setwd("/Users/sergiocarcamo/Dev/econometrics")
 
 library(readr)
 library(dplyr)
 library("sandwich")
 library("lmtest")
 library("MASS")
+#install.packages("mfx")
 library("mfx")
-library("LogisticDx")
+#install.packages("LogisticDx") # error
+#library("LogisticDx")
 library("aod")
+#install.packages("logistf")
 library("logistf")
 library("car")
 library("stargazer")
+#install.packages("aods3")
 library("aods3")
+library("DescTools")
+#install.packages("gof")
+#library("gof")
 
 
 data <- read_csv("dataset.csv")
