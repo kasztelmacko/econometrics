@@ -24,8 +24,6 @@ library("stargazer")
 #install.packages("aods3")
 library("aods3")
 library("DescTools")
-#install.packages("gof")
-#library("gof")
 
 
 data <- read_csv("dataset.csv")
