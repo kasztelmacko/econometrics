@@ -4,7 +4,7 @@
 #                                      #
 ########################################
 
-# setwd("C:\\Users\\kaszt\\OneDrive\\Dokumenty\\advanced econometric\\projekt")
+setwd("C:\\Users\\kaszt\\OneDrive\\Dokumenty\\advanced econometric\\projekt")
 # setwd("/Users/sergiocarcamo/Dev/econometrics")
 
 library(readr)
@@ -24,6 +24,7 @@ library("stargazer")
 #install.packages("aods3")
 library("aods3")
 library("DescTools")
+library(ggplot2)
 
 
 data <- read_csv("dataset.csv")
@@ -122,7 +123,7 @@ glimpse(data)
 data <- data[!is.na(data$TotalCharges), ]
 
 # Churn
-data$Churn <- ifelse(data$Churn == "Yes", TRUE, FALSE)
+data$Churn <- ifelse(data$Churn == "Yes", 1, 0)
 
 glimpse(data)
 
@@ -138,6 +139,9 @@ colSums(is.na(data)) %>%
 #               Model                  #
 #                                      #
 ########################################
+
+
+
 
 general <- glm(Churn ~ . - ECheck, data=data, 
                family=binomial(link="probit"))
@@ -226,10 +230,43 @@ anova(general, reduced_model_5, test = "LRT")
 #                                      #
 ########################################
 
+###### Probit / Logit ###########
+# Fit logit and probit models
+probit_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
+                   , data = data 
+                   , family = binomial(link = "probit"))
+logit_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
+                   , data = data 
+                   , family = binomial(link = "logit"))
+newdata <- data
+newdata$Ratio <- data$MonthlyCharges / data$tenure
+ratio_seq <- seq(min(newdata$Ratio), max(newdata$Ratio), length.out = 100)
+logit_probs <- predict(logit_model, newdata = newdata, type = "response")
+probit_probs <- predict(probit_model, newdata = newdata, type = "response")
+ggplot(newdata, aes(x = Ratio, y = Churn)) +
+  geom_point(shape = 16, size = 2) +
+  stat_function(fun = plogis, aes(color = "Logit"), size = 1.2, linetype = 1) +
+  stat_function(fun = pnorm, aes(color = "Probit"), size = 1.2, linetype = 2) +
+  labs(
+    x = "Ratio (MonthlyCharges / tenure)",
+    y = "Churn",
+    title = "Probit and Logit Models of the Probability of Churn, Given Charges/Tenure ratio"
+  ) +
+  theme_minimal() +
+  xlim(-25, 100) +
+  geom_text(aes(x = 90, y = 0.03, label = "Churn = False"), color = "black", size = 4) +
+  geom_text(aes(x = 90, y = 1.03, label = "Churn = True"), color = "black", size = 4) +
+  scale_color_manual(values = c("Logit" = "blue", "Probit" = "red"), 
+                     labels = c("Logit", "Probit")) +
+  labs(color = "Model") +
+  guides(color = guide_legend(title = "Model")) +
+  scale_y_continuous(breaks = c(0, 0.5, 1), expand = c(0, 0.1))
 
+############ We choose probit model, as it fits the data better ##############
 final_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
-                      , data = data 
-                      , family = binomial(link = "probit"))
+                   , data = data 
+                   , family = binomial(link = "probit"))
+
 
 # quality table presenting general and final model
 model_list <- list(general, final_model)
