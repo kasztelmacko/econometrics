@@ -15,7 +15,7 @@ library("MASS")
 #install.packages("mfx")
 library("mfx")
 #install.packages("LogisticDx") # error
-#library("LogisticDx")
+library("LogisticDx")
 library("aod")
 #install.packages("logistf")
 library("logistf")
@@ -268,12 +268,15 @@ ggplot(newdata, aes(x = Ratio, y = Churn)) +
   scale_y_continuous(breaks = c(0, 0.5, 1), expand = c(0, 0.1))
 
 ############ We choose logit model ###########
+data.significant <- data[, !(names(data) %in% c("ECheck", "Partner", "gender", "OnlineBackup", "PhoneService", "DeviceProtection", "Dependents"))]
 
-final_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection - Dependents
-                   , data = data 
+final_model <- glm(Churn ~ SeniorCitizen + tenure + MultipleLines + InternetService 
+                   + OnlineSecurity + TechSupport + StreamingTV + StreamingMovies 
+                   + Contract + PaperlessBilling + MonthlyCharges + TotalCharges 
+                   + Bank + Credit + MCheck
+                   , data = data.significant
                    , family = binomial(link = "logit"))
 
-summary(final_model)
 
 # quality table presenting general and final model
 model_list <- list(general, final_model)
@@ -282,8 +285,8 @@ stargazer(model_list, type = "text", title = "Regression Model Comparison",
           align = TRUE, column.labels = model_names)
 
 # marginal effects for average characteristics
-probitmfx(formula=Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection - Dependents
-          , data = data
+probitmfx(formula=Churn ~ .
+          , data = data.significant
           , atmean = T)
 
 # marginal effects for user defined characteristics
@@ -303,12 +306,22 @@ PseudoR2(final_model,c("McFadden","Tjur","McKelveyZavoina","VeallZimmermann","Na
 
 # Hosmer-Lemeshow
 # Goodness-of-fit test commonly used to asses the adequacy of logistic regression models
-HosmerLemeshowTest(final_model$fitted.values, data$Churn)
+HosmerLemeshowTest(final_model$fitted.values, data.significant$Churn)
 # H0: the model is well fitted for the data
 # we reject the H0
 
 # Osius-Rojekt test
 # Goodness-of-fit test used in logistic regression models
+gof.results <- gof(final_model)
+gof.results$gof
+## test     stat      val       df   pVal
+## OsRo     Z         2.787577  NA   5.310388e-03
+# H): the model is well fitted for the data
+# we reject the H0
+
 
 # Hypothesis verification
 # use wald.test
+
+
+
