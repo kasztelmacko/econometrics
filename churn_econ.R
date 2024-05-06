@@ -144,13 +144,13 @@ colSums(is.na(data)) %>%
 
 
 general <- glm(Churn ~ . - ECheck, data=data, 
-               family=binomial(link="probit"))
+               family=binomial(link="logit"))
 
 summary(general)
 
 # likelihood ratio test
 # the general model is better than a model only with intercept
-null_probit = glm(Churn~1, data=data, family=binomial(link="probit"))
+null_probit = glm(Churn~1, data=data, family=binomial(link="logit"))
 lrtest(general, null_probit)
 
 # Remove insignificant variables from the model
@@ -158,17 +158,17 @@ lrtest(general, null_probit)
 insignificant_model_1 <- glm(Churn ~ gender + Partner + Dependents
                              + PhoneService + OnlineSecurity 
                              + OnlineBackup + DeviceProtection + TechSupport 
-                             + StreamingTV + MonthlyCharges
+                             + StreamingTV + StreamingMovies + MonthlyCharges
                              , data = data
-                             , family = binomial(link = "probit"))
+                             , family = binomial(link = "logit"))
 
 anova(general, insignificant_model_1, test = "LRT")
 # the variables are jointly significant so we have to take the General-to-specific approach
 
-# Step 2 - remove Partner (p-value: 0.89)
+# Step 2 - remove Partner (p-value: 0.99)
 reduced_model_1 <- glm(Churn ~ . - ECheck - Partner
                        , data = data
-                       , family = binomial(link = "probit"))
+                       , family = binomial(link = "logit"))
 summary(reduced_model_1)
 
 anova(general, reduced_model_1, test = "LRT")
@@ -177,10 +177,10 @@ anova(general, reduced_model_1, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 3
-# let's drop "the most insignificant" - gender
-reduced_model_2 <- glm(Churn ~ . - ECheck - Partner - gender
+# let's drop "the most insignificant" - OnlineBackup (p-value: 0.88)
+reduced_model_2 <- glm(Churn ~ . - ECheck - Partner - OnlineBackup
                        , data = data
-                       , family = binomial(link = "probit"))
+                       , family = binomial(link = "logit"))
 summary(reduced_model_2)
 
 anova(general, reduced_model_2, test = "LRT")
@@ -189,10 +189,10 @@ anova(general, reduced_model_2, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 4
-# let's drop "the most insignificant" - OnlineBackup
+# let's drop "the most insignificant" - gender (p-value: 0.73)
 reduced_model_3 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup
                        , data = data
-                       , family = binomial(link = "probit"))
+                       , family = binomial(link = "logit"))
 summary(reduced_model_3)
 
 anova(general, reduced_model_3, test = "LRT")
@@ -201,10 +201,10 @@ anova(general, reduced_model_3, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 5
-# let's drop "the most insignificant" - PhoneService
+# let's drop "the most insignificant" - PhoneService (p-value: 0.78)
 reduced_model_4 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService
                        , data = data
-                       , family = binomial(link = "probit"))
+                       , family = binomial(link = "logit"))
 summary(reduced_model_4)
 
 anova(general, reduced_model_4, test = "LRT")
@@ -216,10 +216,22 @@ anova(general, reduced_model_4, test = "LRT")
 # let's drop "the most insignificant" - DeviceProtection
 reduced_model_5 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
                        , data = data 
-                       , family = binomial(link = "probit"))
+                       , family = binomial(link = "logit"))
 summary(reduced_model_5)
 
 anova(general, reduced_model_5, test = "LRT")
+# there are still insignificant variables in reduced_model_5
+# We fail to reject H0 that the reduced model is better than general 
+# both models are equally good, so we continue with removing variables
+
+# Step 7
+# let's drop "the most insignificant" - Dependents (p-value: 0.06)
+reduced_model_6 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection - Dependents
+                       , data = data 
+                       , family = binomial(link = "logit"))
+summary(reduced_model_6)
+
+anova(general, reduced_model_6, test = "LRT")
 # there is no insignificant variables anymore
 # we can stop with the General to specific approach now
 
@@ -232,17 +244,10 @@ anova(general, reduced_model_5, test = "LRT")
 
 ###### Probit / Logit ###########
 # Fit logit and probit models
-probit_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
-                   , data = data 
-                   , family = binomial(link = "probit"))
-logit_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
-                   , data = data 
-                   , family = binomial(link = "logit"))
 newdata <- data
 newdata$Ratio <- data$MonthlyCharges / data$tenure
 ratio_seq <- seq(min(newdata$Ratio), max(newdata$Ratio), length.out = 100)
-logit_probs <- predict(logit_model, newdata = newdata, type = "response")
-probit_probs <- predict(probit_model, newdata = newdata, type = "response")
+
 ggplot(newdata, aes(x = Ratio, y = Churn)) +
   geom_point(shape = 16, size = 2) +
   stat_function(fun = plogis, aes(color = "Logit"), size = 1.2, linetype = 1) +
@@ -262,11 +267,13 @@ ggplot(newdata, aes(x = Ratio, y = Churn)) +
   guides(color = guide_legend(title = "Model")) +
   scale_y_continuous(breaks = c(0, 0.5, 1), expand = c(0, 0.1))
 
-############ We choose probit model, as it fits the data better ##############
-final_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
-                   , data = data 
-                   , family = binomial(link = "probit"))
+############ We choose logit model ###########
 
+final_model <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection - Dependents
+                   , data = data 
+                   , family = binomial(link = "logit"))
+
+summary(final_model)
 
 # quality table presenting general and final model
 model_list <- list(general, final_model)
@@ -275,12 +282,12 @@ stargazer(model_list, type = "text", title = "Regression Model Comparison",
           align = TRUE, column.labels = model_names)
 
 # marginal effects for average characteristics
-probitmfx(formula=Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
+probitmfx(formula=Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection - Dependents
           , data = data
           , atmean = T)
 
 # marginal effects for user defined characteristics
-# I DONT KNOW 
+
 source("marginaleffects.R")
 
 # linktest
