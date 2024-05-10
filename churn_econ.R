@@ -25,9 +25,10 @@ library("stargazer")
 library("aods3")
 library("DescTools")
 library(ggplot2)
+library(AER)
 
 
-data <- read_csv("dataset.csv")
+data <- read_csv("data/dataset.csv")
 
 glimpse(data)
 
@@ -47,31 +48,33 @@ glimpse(unique_value_counts)
 
 # gender
 table(data$gender)
-data$gender <- factor(data$gender, levels = c("Female", "Male"))
+data$gender <- ifelse(data$gender == "Male", 1, 0)
 
 # SeniorCitizen
 table(data$SeniorCitizen)
-data$SeniorCitizen <- as.logical(data$SeniorCitizen)
+# already binary
 
 # Partner
 table(data$Partner)
-data$Partner <- ifelse(data$Partner == "Yes", TRUE, FALSE)
+data$Partner <- ifelse(data$Partner == "Yes", 1, 0)
 
 # Dependents
 table(data$Dependents)
-data$Dependents <- ifelse(data$Dependents == "Yes", TRUE, FALSE)
+data$Dependents <- ifelse(data$Dependents == "Yes", 1, 0)
 
 # tenure
 hist(data$tenure)
+hist(log(data$tenure))
 
 # Phone Service
-data$PhoneService <- ifelse(data$PhoneService == "Yes", TRUE, FALSE)
+data$PhoneService <- ifelse(data$PhoneService == "Yes", 1, 0)
 
 # Internet Service
 table(data$InternetService)
-data$InternetService <- factor(data$InternetService, levels = c("DSL", "Fiber optic", "No"))
-levels(data$InternetService)[levels(data$InternetService) == "Fiber optic"] <- "Fiber"
-
+data$Internet_DSL <- ifelse(data$InternetService == "DSL", 1, 0)
+data$Internet_Fiber <- ifelse(data$InternetService == "Fiber optic", 1, 0)
+data$Internet_NoInternet <- ifelse(data$InternetService == "No", 1, 0)
+data <- subset(data, select = -InternetService)
 
 # combine "No" and "No internet service" / "No phone service" into "No" 
 # as both mean user did not chose this service
@@ -91,31 +94,32 @@ data$StreamingTV <- combine_levels(data$StreamingTV)
 data$StreamingMovies <- combine_levels(data$StreamingMovies)
 
 # Factorize variables with only two levels: "No" and "Yes"
-data$MultipleLines <- factor(data$MultipleLines)
-data$OnlineSecurity <- factor(data$OnlineSecurity)
-data$OnlineBackup <- factor(data$OnlineBackup)
-data$DeviceProtection <- factor(data$DeviceProtection)
-data$TechSupport <- factor(data$TechSupport)
-data$StreamingTV <- factor(data$StreamingTV)
-data$StreamingMovies <- factor(data$StreamingMovies)
+data$MultipleLines <- ifelse(data$MultipleLines == "Yes", 1, 0)
+data$OnlineSecurity <- ifelse(data$OnlineSecurity == "Yes", 1, 0)
+data$OnlineBackup <- ifelse(data$OnlineBackup == "Yes", 1, 0)
+data$DeviceProtection <- ifelse(data$DeviceProtection == "Yes", 1, 0)
+data$TechSupport <- ifelse(data$TechSupport == "Yes", 1, 0)
+data$StreamingTV <- ifelse(data$StreamingTV == "Yes", 1, 0)
+data$StreamingMovies <- ifelse(data$StreamingMovies == "Yes", 1, 0)
 
 
 # Contract
 table(data$Contract)
-data$Contract <- factor(data$Contract, levels = c("Month-to-month", "One year", "Two year"))
-levels(data$Contract)[levels(data$Contract) == "One year"] <- "One_Year"
-levels(data$Contract)[levels(data$Contract) == "Two year"] <- "Two_Year"
+data$Contract_MonthToMonth <- ifelse(data$Contract == "Month-to-month", 1, 0)
+data$Contract_OneYear <- ifelse(data$Contract == "One year", 1, 0)
+data$Contract_TwoYear <- ifelse(data$Contract == "Two year", 1, 0)
+data <- subset(data, select = -Contract)
 
 # Paperless Billing
-data$PaperlessBilling <- ifelse(data$PaperlessBilling == "Yes", TRUE, FALSE)
+data$PaperlessBilling <- ifelse(data$PaperlessBilling == "Yes", 1, 0)
 
 # PaymentMethod
 # treat Electronic Check as a base level and dont use it when creating a model
 table(data$PaymentMethod)
-data$Bank <- ifelse(data$PaymentMethod == "Bank transfer (automatic)", 1, 0)
-data$Credit <- ifelse(data$PaymentMethod == "Credit card (automatic)", 1, 0)
-data$ECheck <- ifelse(data$PaymentMethod == "Electronic check", 1, 0)
-data$MCheck <- ifelse(data$PaymentMethod == "Mailed check", 1, 0)
+data$Payment_Bank <- ifelse(data$PaymentMethod == "Bank transfer (automatic)", 1, 0)
+data$Payment_Credit <- ifelse(data$PaymentMethod == "Credit card (automatic)", 1, 0)
+data$Payment_ECheck <- ifelse(data$PaymentMethod == "Electronic check", 1, 0)
+data$Payment_MCheck <- ifelse(data$PaymentMethod == "Mailed check", 1, 0)
 data <- subset(data, select = -c(PaymentMethod))
 glimpse(data)
 
@@ -139,11 +143,12 @@ colSums(is.na(data)) %>%
 #               Model                  #
 #                                      #
 ########################################
+# remove one level from all variable levels
+# treat them as base level
+final_data <- subset(data, select = -c(Internet_DSL, Contract_MonthToMonth, Payment_Bank))
 
 
-
-
-general <- glm(Churn ~ . - ECheck, data=data, 
+general <- glm(Churn ~ ., data=final_data, 
                family=binomial(link="logit"))
 
 summary(general)
@@ -156,9 +161,10 @@ lrtest(general, null_probit)
 # Remove insignificant variables from the model
 # Step 1 - check if all insignificant variables are jointly significant
 insignificant_model_1 <- glm(Churn ~ gender + Partner + Dependents
-                             + PhoneService + OnlineSecurity 
-                             + OnlineBackup + DeviceProtection + TechSupport 
-                             + StreamingTV + StreamingMovies + MonthlyCharges
+                             + PhoneService + OnlineSecurity + OnlineBackup
+                             + DeviceProtection + TechSupport + StreamingTV
+                             + StreamingMovies + MonthlyCharges + Payment_Credit
+                             + Payment_MCheck
                              , data = data
                              , family = binomial(link = "logit"))
 
@@ -166,8 +172,8 @@ anova(general, insignificant_model_1, test = "LRT")
 # the variables are jointly significant so we have to take the General-to-specific approach
 
 # Step 2 - remove Partner (p-value: 0.99)
-reduced_model_1 <- glm(Churn ~ . - ECheck - Partner
-                       , data = data
+reduced_model_1 <- glm(Churn ~ . -Partner
+                       , data = final_data
                        , family = binomial(link = "logit"))
 summary(reduced_model_1)
 
@@ -178,8 +184,8 @@ anova(general, reduced_model_1, test = "LRT")
 
 # Step 3
 # let's drop "the most insignificant" - OnlineBackup (p-value: 0.88)
-reduced_model_2 <- glm(Churn ~ . - ECheck - Partner - OnlineBackup
-                       , data = data
+reduced_model_2 <- glm(Churn ~ . -Partner -OnlineBackup
+                       , data = final_data
                        , family = binomial(link = "logit"))
 summary(reduced_model_2)
 
@@ -189,9 +195,9 @@ anova(general, reduced_model_2, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 4
-# let's drop "the most insignificant" - gender (p-value: 0.73)
-reduced_model_3 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup
-                       , data = data
+# let's drop "the most insignificant" - PhoneService (p-value: 0.77)
+reduced_model_3 <- glm(Churn ~ . -Partner -OnlineBackup -PhoneService
+                       , data = final_data
                        , family = binomial(link = "logit"))
 summary(reduced_model_3)
 
@@ -201,9 +207,9 @@ anova(general, reduced_model_3, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 5
-# let's drop "the most insignificant" - PhoneService (p-value: 0.78)
-reduced_model_4 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService
-                       , data = data
+# let's drop "the most insignificant" - gender (p-value: 0.73)
+reduced_model_4 <- glm(Churn ~ . -Partner -OnlineBackup -PhoneService -gender
+                       , data = final_data
                        , family = binomial(link = "logit"))
 summary(reduced_model_4)
 
@@ -213,9 +219,9 @@ anova(general, reduced_model_4, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 6
-# let's drop "the most insignificant" - DeviceProtection
-reduced_model_5 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection
-                       , data = data 
+# let's drop "the most insignificant" - Payment_MCheck (p-value: 0.61)
+reduced_model_5 <- glm(Churn ~ . -Partner -OnlineBackup -PhoneService -gender -Payment_MCheck
+                       , data = final_data 
                        , family = binomial(link = "logit"))
 summary(reduced_model_5)
 
@@ -225,13 +231,38 @@ anova(general, reduced_model_5, test = "LRT")
 # both models are equally good, so we continue with removing variables
 
 # Step 7
-# let's drop "the most insignificant" - Dependents (p-value: 0.06)
-reduced_model_6 <- glm(Churn ~ . - ECheck - Partner - gender - OnlineBackup - PhoneService - DeviceProtection - Dependents
-                       , data = data 
+# let's drop "the most insignificant" - Payment_Credit (p-value: 0.54)
+reduced_model_6 <- glm(Churn ~ . -Partner -OnlineBackup -PhoneService -gender -Payment_MCheck -Payment_Credit
+                       , data = final_data 
                        , family = binomial(link = "logit"))
 summary(reduced_model_6)
 
 anova(general, reduced_model_6, test = "LRT")
+# there are still insignificant variables in reduced_model_6
+# We fail to reject H0 that the reduced model is better than general 
+# both models are equally good, so we continue with removing variables
+
+# Step 8
+# let's drop "the most insignificant" - DeviceProtection (p-value: 0.19)
+reduced_model_7 <- glm(Churn ~ . -Partner -OnlineBackup -PhoneService -gender -Payment_MCheck -Payment_Credit -DeviceProtection
+                       , data = final_data 
+                       , family = binomial(link = "logit"))
+summary(reduced_model_7)
+
+anova(general, reduced_model_7, test = "LRT")
+
+# there are still insignificant variables in reduced_model_7
+# We fail to reject H0 that the reduced model is better than general 
+# both models are equally good, so we continue with removing variables
+
+# Step 9
+# let's drop "the most insignificant" - Dependents (p-value: 0.06)
+reduced_model_8 <- glm(Churn ~ . -Partner -OnlineBackup -PhoneService -gender -Payment_MCheck -Payment_Credit -DeviceProtection -Dependents
+                       , data = final_data 
+                       , family = binomial(link = "logit"))
+summary(reduced_model_8)
+
+anova(general, reduced_model_8, test = "LRT")
 # there is no insignificant variables anymore
 # we can stop with the General to specific approach now
 
@@ -268,16 +299,15 @@ ggplot(newdata, aes(x = Ratio, y = Churn)) +
   scale_y_continuous(breaks = c(0, 0.5, 1), expand = c(0, 0.1))
 
 ############ We choose logit model ###########
-data.significant <- data[, !(names(data) %in% c("ECheck", "Partner", "gender", "OnlineBackup", "PhoneService", "DeviceProtection", "Dependents"))]
-
-final_model <- glm(Churn ~ SeniorCitizen + tenure + MultipleLines + InternetService 
-                   + OnlineSecurity + TechSupport + StreamingTV + StreamingMovies 
-                   + Contract + PaperlessBilling + MonthlyCharges + TotalCharges 
-                   + Bank + Credit + MCheck
-                   , data = data.significant
+final_model <- glm(Churn~SeniorCitizen + tenure + MultipleLines 
+                   + OnlineSecurity + TechSupport + StreamingTV
+                   + StreamingMovies + PaperlessBilling + MonthlyCharges
+                   + TotalCharges + Internet_Fiber + Internet_NoInternet
+                   + Contract_OneYear + Contract_TwoYear + Payment_ECheck
+                   , data = final_data
                    , family = binomial(link = "logit"))
 
-
+summary(final_model)
 # quality table presenting general and final model
 model_list <- list(general, final_model)
 model_names <- c("General Model", "Final Model")
@@ -285,16 +315,23 @@ stargazer(model_list, type = "text", title = "Regression Model Comparison",
           align = TRUE, column.labels = model_names)
 
 # marginal effects for average characteristics
-probitmfx(formula=Churn ~ .
-          , data = data.significant
+probitmfx(formula=Churn~SeniorCitizen + tenure + MultipleLines 
+          + OnlineSecurity + TechSupport + StreamingTV
+          + StreamingMovies + PaperlessBilling + MonthlyCharges
+          + TotalCharges + Internet_Fiber + Internet_NoInternet
+          + Contract_OneYear + Contract_TwoYear + Payment_ECheck
+          , data = final_data
           , atmean = T)
 
 # marginal effects for user defined characteristics
-
-source("marginaleffects.R")
+source("functions/marginaleffects.R")
+glimpse(final_data)
+# c(intercept, x1, x2, ...)
+user.def.obs = c(0.804, 0, 4, 0, 1, 1, 1, 1, 1, 65, 260, 1, 0, 0, 1, 1)
+marginaleffects(final_model, user.def.obs)
 
 # linktest
-source("linktest.R")
+source("functions/linktest.R")
 # The linktest evaluates if the functional form specified
 # for the predictors in the model  adequatly captures the relationship with the response variable
 linktest_result <- linktest(final_model)
@@ -304,24 +341,28 @@ linktest_result <- linktest(final_model)
 # R-Squared 
 PseudoR2(final_model,c("McFadden","Tjur","McKelveyZavoina","VeallZimmermann","Nagelkerke"))
 
-# Hosmer-Lemeshow
-# Goodness-of-fit test commonly used to asses the adequacy of logistic regression models
-HosmerLemeshowTest(final_model$fitted.values, data.significant$Churn)
-# H0: the model is well fitted for the data
-# we reject the H0
-
-# Osius-Rojekt test
+# Hosmer-Lemeshow and Osius-Rojekt test 
 # Goodness-of-fit test used in logistic regression models
-gof.results <- gof(final_model)
+gof.results <- LogisticDx::gof(final_model)
 gof.results$gof
-## test     stat      val       df   pVal
-## OsRo     Z         2.787577  NA   5.310388e-03
-# H): the model is well fitted for the data
-# we reject the H0
+#         test    stat       val      df      pVal
+#1:         HL    chiSq      25.97    8       0.0106
+#2:       OsRo    Z          2.71     NA      0.067
 
 
 # Hypothesis verification
-# use wald.test
+# use wald.test 
+final_model_with_omited <- glm(Churn~SeniorCitizen + tenure + MultipleLines 
+                   + OnlineSecurity + TechSupport + StreamingTV
+                   + StreamingMovies + PaperlessBilling + MonthlyCharges
+                   + TotalCharges + Internet_Fiber + Internet_NoInternet
+                   + Contract_OneYear + Contract_TwoYear + Payment_ECheck
+                   + Dependents
+                   , data = final_data
+                   , family = binomial(link = "logit"))
+waldtest(final_model, general, test="F")
+# p-value of wald test is > 0.05 so we fail to reject H0, and can conclude
+# that the coefficients of the omitted variables are significantly different from zero.
 
 
 
